@@ -1,119 +1,97 @@
-# GH Agent — Setup Guide
+# GH Agent
 
-GH Agent connects your live Grasshopper canvas to Claude Desktop (or any MCP-compatible AI client).
-Claude can read your canvas, inspect errors, and read Python scripts — all from the chat window.
+GH Agent connects a live Grasshopper canvas to Claude Desktop (or any MCP-compatible AI client). Claude can read your canvas, inspect errors, and write Python scripts — all from the chat window.
+
+End users: download the installer from the [Releases](https://github.com/zihaoooo/gh-agent/releases) page.
 
 ---
 
-## HOW IT WORKS
+## How it works
 
 ```
 Rhino / Grasshopper
-  └── GH component  →  posts canvas data  →  mcp_server.py (port 8000)
-                                                    ↕ MCP protocol (stdio)
+  └── GHAgentComponent.cs  ──POST /canvas──▶  mcp_server.py :8000
+                            ◀──GET /commands──  (HTTP, localhost only)
+                                                      │
+                                               MCP stdio protocol
+                                                      │
                                               Claude Desktop
 ```
 
-The GH component keeps your canvas in sync with the server.
-You do all your AI conversation in Claude Desktop — no panels, no buttons, just chat.
+Three processes, two channels:
+
+1. **The GH component** (`plugin/`) is a compiled `.gha` that runs inside Grasshopper. It serializes the canvas on a 5-second timer and POSTs the data to a local HTTP server. It also polls `/commands` every 2 seconds to receive and execute actions queued by Claude (e.g. adding a component, injecting a Python script).
+
+2. **The MCP server** (`server/mcp_server.py`) runs two things in one process: a small `HTTPServer` on port 8000 (background thread) that accepts canvas data and serves command queues, and a `FastMCP` stdio server that Claude Desktop connects to. The HTTP layer is the bridge between Grasshopper and MCP.
+
+3. **Claude Desktop** connects to `mcp_server.py` via MCP stdio and calls tools to read or modify the canvas. No API keys or browser extension needed — just the MCP config.
 
 ---
 
-## FIRST TIME SETUP
+## Repo structure
 
-### 1. Install the MCP library
-Open Command Prompt and run:
 ```
-pip install mcp fastmcp
+gh-agent/
+├── plugin/
+│   ├── GHAgentComponent.cs   — Grasshopper component: canvas serializer + command executor
+│   ├── GHAgentInfo.cs        — plugin metadata (name, version, icon)
+│   └── GHAgent.csproj        — .NET build config, targets Rhino 8 SDK
+├── server/
+│   ├── mcp_server.py         — MCP server + HTTP bridge + tool definitions + component library
+│   └── configure.py          — CLI helper: detects Python, writes claude_desktop_config.json
+├── installer/
+│   └── setup.iss             — Inno Setup script: bundles .gha, mcp_server.py, configure.py
+├── assets/
+│   └── icon.ico
+└── dist/                     — gitignored; built artifacts go here
 ```
 
-### 2. Note the full path to mcp_server.py
-Example: `C:\Users\yourname\Desktop\gh-agent\mcp_server.py`
-You'll need this in the next step.
+---
 
-### 3. Add GH Agent to Claude Desktop
-Open Claude Desktop → Settings → Developer → Edit Config
+## MCP tools
 
-This opens a file called `claude_desktop_config.json`. Add the following:
-```json
-{
-  "mcpServers": {
-    "gh-agent": {
-      "command": "python",
-      "args": ["C:/Users/yourname/Desktop/gh-agent/mcp_server.py"]
-    }
-  }
-}
+| Tool | Type | Description |
+|---|---|---|
+| `get_canvas_overview` | read | All nodes: type, name, nickname, error flag |
+| `get_nodes_with_errors` | read | Only nodes with errors + messages |
+| `get_node_error` | read | Full error message for a single node |
+| `get_node_details` | read | Full JSON for a single node including position and script |
+| `get_python_script` | read | Source code of a Python 3 Script component |
+| `get_component_library` | read | Curated list of addable components with descriptions |
+| `add_component` | write | Queues a component-add command; placed near a reference node |
+| `write_python_script` | write | Queues a script-inject command into a Python 3 Script component |
+
+Write tools work via the command queue: Claude pushes a command, the GH component picks it up within 2 seconds on its poll cycle.
+
+---
+
+## Building
+
+**Plugin (C#)**
+
+Requires Rhino 8 and the Grasshopper SDK. Build with Visual Studio or `dotnet build`:
+
 ```
-Replace the path with your actual path. Use forward slashes.
-Save the file and restart Claude Desktop.
+cd plugin
+dotnet build -c Release
+```
 
-### 4. Verify the connection
-In Claude Desktop, click the tools icon (hammer) in the chat input.
-You should see the GH Agent tools listed: get_canvas_overview, get_nodes_with_errors, etc.
+Output: `plugin/bin/Release/net48/GHAgent.gha`
 
----
+**Installer**
 
-## SETTING UP THE GRASSHOPPER COMPONENT
+Requires [Inno Setup 6](https://jrsoftware.org/isinfo.php). Open `installer/setup.iss` and run Build → Compile. The `.exe` lands in `dist/`.
 
-1. Open Rhino 8 and Grasshopper
-2. Add a **Python 3 Script** component to the canvas
-3. Double-click to open the editor
-4. Delete existing code and paste the contents of `gh_component.py`
-5. Close the editor
-
-### Add one input
-Right-click the component → Manage Parameters → add:
-- `run` (Item, Boolean)
-
-Connect a **Toggle** or **Button** to `run`.
-
-### The output
-Connect a **Panel** to output `a` to see the sync status.
+The installer: copies `GHAgent.gha` to the Grasshopper Libraries folder, copies `mcp_server.py` and `configure.py` to `%APPDATA%\GHAgent\`, runs `configure.py pip` to install `mcp` and `fastmcp`, then runs `configure.py install` to write `claude_desktop_config.json`.
 
 ---
 
-## USING GH AGENT
+## Extending the component library
 
-1. Make sure Claude Desktop is running and GH Agent tools are visible
-2. Open your Grasshopper canvas
-3. The component syncs automatically whenever it recalculates
-4. Open Claude Desktop and just ask naturally:
-
-**Example prompts:**
-- "What is on my canvas right now?"
-- "I have errors — what is wrong and how do I fix them?"
-- "Explain what this canvas does"
-- "Write a Python script that takes a list of points and returns the average"
-- "I want to create a waffle structure from a surface, what components do I need?"
-
-Claude will call the canvas tools automatically when needed.
+`COMPONENT_LIBRARY` in `mcp_server.py` is the only place that needs editing to add new addable components. Each entry needs a `gh_name` that matches what Grasshopper's `ComponentServer` recognizes. The `.gha` does not need to be recompiled.
 
 ---
 
-## WORKS WITH OTHER AI CLIENTS
+## License
 
-Any MCP-compatible client works with the same `mcp_server.py`:
-- **Claude Desktop** ✓
-- **Cursor** ✓
-- **Windsurf** ✓
-- **ChatGPT** ✗ (does not support MCP)
-
-Each client handles its own API key and billing. You do not manage any API keys here.
-
----
-
-## TROUBLESHOOTING
-
-**Tools not showing in Claude Desktop**
-→ Check the path in `claude_desktop_config.json` is correct and uses forward slashes
-→ Restart Claude Desktop after editing the config
-
-**"Could not reach MCP server" in GH**
-→ Claude Desktop has not launched the server yet
-→ Try sending a message in Claude Desktop to wake it up
-→ Or run `python mcp_server.py` manually in Command Prompt to test
-
-**Canvas not updating**
-→ The GH component runs on Grasshopper's normal recalculation cycle
-→ If it seems stale, press the Toggle to force a sync
+MIT
