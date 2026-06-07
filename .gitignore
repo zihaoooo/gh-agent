@@ -1,0 +1,23 @@
+# Build outputs
+dist/
+plugin/bin/
+plugin/obj/
+*.gha
+*.dll
+*.pdb
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vs/
+*.user
+*.suo

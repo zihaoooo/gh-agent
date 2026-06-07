@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0-windows</TargetFramework>
+    <AssemblyName>GHAgent</AssemblyName>
+    <RootNamespace>GHAgent</RootNamespace>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+  </PropertyGroup>
+
+  <!-- Grasshopper SDK — reference only, do not copy DLLs to output -->
+  <ItemGroup>
+    <PackageReference Include="Grasshopper" Version="8.*">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- Rename output from .dll to .gha after build -->
+  <Target Name="RenameToGha" AfterTargets="Build">
+    <Move
+      SourceFiles="$(OutputPath)$(AssemblyName).dll"
+      DestinationFiles="$(OutputPath)$(AssemblyName).gha"
+      Condition="Exists('$(OutputPath)$(AssemblyName).dll')" />
+  </Target>
+
+  <!-- Copy .gha to setup folder after rename -->
+  <Target Name="CopyToSetup" AfterTargets="RenameToGha">
+    <Copy
+      SourceFiles="$(OutputPath)$(AssemblyName).gha"
+      DestinationFiles="$(MSBuildProjectDirectory)\..\plugin\$(AssemblyName).gha"
+      Condition="Exists('$(OutputPath)$(AssemblyName).gha')" />
+  </Target>
+
+</Project>
