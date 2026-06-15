@@ -67,22 +67,21 @@ Write tools work via the command queue: Claude pushes a command, the GH componen
 
 ## Building
 
-**Plugin (C#)**
+Requires the **.NET SDK 7** (Rhino 8 / Grasshopper SDK) and **[Inno Setup 6](https://jrsoftware.org/isinfo.php)**.
 
-Requires Rhino 8 and the Grasshopper SDK. Build with Visual Studio or `dotnet build`:
+**One-shot:** run `build.bat` from the repo root. It builds the `.gha` (Release), stages it to `plugin/GHAgent.gha`, then compiles the installer. `GHAgent_Setup.exe` lands in `dist/`.
+
+**Manual:**
 
 ```
-cd plugin
-dotnet build -c Release
+dotnet build plugin\GHAgent.csproj -c Release
+copy /Y plugin\bin\Release\net7.0-windows\GHAgent.gha plugin\GHAgent.gha
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
 ```
 
-Output: `plugin/bin/Release/net48/GHAgent.gha`
+The staging copy matters: `setup.iss` packages `plugin/GHAgent.gha`, but the build outputs to `plugin/bin/Release/net7.0-windows/`. See [BUILD.md](BUILD.md) for the full guide and the per-release version edits.
 
-**Installer**
-
-Requires [Inno Setup 6](https://jrsoftware.org/isinfo.php). Open `installer/setup.iss` and run Build → Compile. The `.exe` lands in `dist/`.
-
-The installer: copies `GHAgent.gha` to the Grasshopper Libraries folder, copies `mcp_server.py` and `configure.py` to `%APPDATA%\GHAgent\`, runs `configure.py pip` to install `mcp` and `fastmcp`, then runs `configure.py install` to write `claude_desktop_config.json`.
+The installer copies `GHAgent.gha` to the Grasshopper Libraries folder, copies `mcp_server.py` and `configure.py` to `%APPDATA%\GH Agent\`, runs `configure.py pip` to install `mcp` and `fastmcp`, then runs `configure.py install` to write `claude_desktop_config.json`.
 
 ---
 

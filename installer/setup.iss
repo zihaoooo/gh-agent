@@ -15,6 +15,8 @@ DisableDirPage=yes
 DefaultGroupName=GH Agent
 DisableProgramGroupPage=yes
 
+; Paths below are relative to the repo root, not this installer/ folder.
+SourceDir=..
 OutputDir=dist
 OutputBaseFilename=GHAgent_Setup
 SetupIconFile=assets\icon.ico
@@ -39,10 +41,10 @@ FinishedLabel=Installation complete.%n%nNext steps:%n%n1. Restart Rhino — the 
 
 [Files]
 ; MCP server
-Source: "mcp_server.py";      DestDir: "{app}";                               Flags: ignoreversion
+Source: "server\mcp_server.py"; DestDir: "{app}";                             Flags: ignoreversion
 
 ; Config helper
-Source: "configure.py";       DestDir: "{app}";                               Flags: ignoreversion
+Source: "server\configure.py";  DestDir: "{app}";                             Flags: ignoreversion
 
 ; Grasshopper plugin
 Source: "plugin\GHAgent.gha"; DestDir: "{userappdata}\Grasshopper\Libraries"; Flags: ignoreversion
